@@ -3,9 +3,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: Windspotter backend — serverless functions (currently spot enrichment)
 
 Parameters:
-  AlertEmail:
-    Type: String
-    Description: Email address for the monthly cost-budget alert.
   SpotModel:
     Type: String
     Default: claude-haiku-4-5
@@ -47,24 +44,11 @@ Resources:
           AllowMethods: ['*']
           AllowHeaders: ['content-type', 'x-api-token']
 
-  SpotBudget:
-    Type: AWS::Budgets::Budget
-    Properties:
-      Budget:
-        BudgetName: windspotter-monthly
-        BudgetLimit:
-          Amount: '10'
-          Unit: USD
-        TimeUnit: MONTHLY
-        BudgetType: COST
-      NotificationsWithSubscribers:
-        - Notification:
-            NotificationType: ACTUAL
-            ComparisonOperator: GREATER_THAN
-            Threshold: 80
-          Subscribers:
-            - SubscriptionType: EMAIL
-              Address: !Ref AlertEmail
+  # NOTE: a $10 cost budget used to live here, but AWS::Budgets::Budget is only
+  # supported by CloudFormation in us-east-1 (Budgets is a global/us-east-1 service),
+  # and this stack deploys to eu-north-1. Set the budget in the Billing console
+  # (Budgets → Create budget) instead — it's region-agnostic. Spend is still bounded
+  # by the Haiku model + ReservedConcurrentExecutions + your finite Anthropic balance.
 
 Outputs:
   EnrichFunctionUrl:
