@@ -1,0 +1,6 @@
+# Runtime deps for the enrich function only (boto3 is provided by the Lambda runtime).
+# Other functions (monitor, notifier) will have their own, lighter requirements —
+# e.g. no `anthropic`.
+anthropic
+pydantic>=2.0
+httpx

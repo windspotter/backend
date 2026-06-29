@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Windspotter backend — serverless functions (currently: spot enrichment)
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: Email address for the monthly cost-budget alert.
+  SpotModel:
+    Type: String
+    Default: claude-haiku-4-5
+    Description: Anthropic model id used by the pipeline (haiku is the cheapest).
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    Timeout: 180
+    MemorySize: 512
+
+Resources:
+  # --- Spot enrichment, behind a Function URL ---
+  # To add another Lambda: create functions/<name>/ (handler.py + requirements.txt
+  # + Makefile) and copy this block with a new logical ID + CodeUri.
+  EnrichFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile          # builds via functions/enrich/Makefile (Docker-free)
+    Properties:
+      Handler: handler.handler
+      CodeUri: ../functions/enrich
+      ReservedConcurrentExecutions: 2
+      Environment:
+        Variables:
+          SPOT_MODEL: !Ref SpotModel
+          ANTHROPIC_KEY_PARAM: /spot-consultant/anthropic-api-key
+          API_TOKEN_PARAM: /spot-consultant/api-token
+      Policies:
+        - SSMParameterReadPolicy:
+            ParameterName: spot-consultant/*
+      FunctionUrlConfig:
+        AuthType: NONE               # public URL; the handler enforces x-api-token
+        Cors:
+          AllowOrigins: ['*']
+          AllowMethods: ['*']
+          AllowHeaders: ['content-type', 'x-api-token']
+
+  SpotBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: windspotter-monthly
+        BudgetLimit:
+          Amount: '10'
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  EnrichFunctionUrl:
+    Description: Public Function URL for spot enrichment — call with an 'x-api-token' header.
+    Value: !GetAtt EnrichFunctionUrl.FunctionUrl
