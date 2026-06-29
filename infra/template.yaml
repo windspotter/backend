@@ -25,10 +25,12 @@ Resources:
   EnrichFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      BuildMethod: makefile          # builds via functions/enrich/Makefile (Docker-free)
+      BuildMethod: makefile          # builds via the repo-root Makefile (Docker-free)
     Properties:
       Handler: handler.handler
-      CodeUri: ../functions/enrich
+      # Repo root, so the build copy includes the shared spot_consultant package
+      # (SAM builds from a copy of CodeUri and can't reach sibling folders).
+      CodeUri: ..
       ReservedConcurrentExecutions: 2
       Environment:
         Variables:
