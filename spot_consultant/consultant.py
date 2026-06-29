@@ -28,6 +28,21 @@ from .validation import SpotStatus, Validation
 MODEL = os.environ.get("SPOT_MODEL", "claude-opus-4-8")
 ANALYSIS_SKILL = "analyze-watersport-spot"
 
+# 4.6+ models support adaptive thinking and the dynamic-filtering web tools;
+# Haiku 4.5 / Sonnet 4.5 reject adaptive thinking and need the basic web-search tool.
+_MODERN_MODEL = MODEL.startswith(
+    ("claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6", "claude-fable-5")
+)
+_WEB_TOOLS = (
+    [
+        {"type": "web_search_20260209", "name": "web_search", "max_uses": 4},
+        {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3},
+    ]
+    if _MODERN_MODEL
+    else [{"type": "web_search_20250305", "name": "web_search", "max_uses": 4}]
+)
+_THINKING = {"thinking": {"type": "adaptive"}} if _MODERN_MODEL else {}
+
 
 class EnrichmentResult(BaseModel):
     query: str
@@ -49,15 +64,10 @@ def _analyze(client, query: str, context: str) -> str:
         resp = client.messages.create(
             model=MODEL,
             max_tokens=8000,
-            thinking={"type": "adaptive"},
             system=system,
-            tools=[
-                # max_uses caps how many searches/fetches a run can make — this is
-                # the main cost lever for web search; keep it small.
-                {"type": "web_search_20260209", "name": "web_search", "max_uses": 4},
-                {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3},
-            ],
+            tools=_WEB_TOOLS,        # max_uses on each caps web-search cost
             messages=messages,
+            **_THINKING,
         )
         if resp.stop_reason == "pause_turn":
             messages.append({"role": "assistant", "content": resp.content})
